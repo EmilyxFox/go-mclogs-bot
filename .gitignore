@@ -1,0 +1,9 @@
+# Build
+*.exe
+
+# Temp
+/tmp
+
+# Env
+.env*
+!.env.example

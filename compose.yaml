@@ -1,0 +1,6 @@
+services:
+  bot:
+    build: .
+    restart: on-failure:3
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN}

@@ -1,0 +1,13 @@
+*.exe
+
+# Temp
+/tmp
+
+# Env
+.env*
+!.env.example
+
+.gitignore
+.air.toml
+
+compose.yaml
