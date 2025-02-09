@@ -25,7 +25,6 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	logger := slog.With(
 		slog.Group("message",
 			slog.String("id", m.ID),
-			"attachments", m.Attachments,
 		),
 		slog.Group("channel",
 			slog.String("id", m.ChannelID),
@@ -35,6 +34,8 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			slog.String("name", m.Author.Username),
 		),
 	)
+
+	logger.Info("Found message attachments", "attachments", m.Attachments)
 
 	typingStarted := false
 	for _, a := range m.Attachments {
