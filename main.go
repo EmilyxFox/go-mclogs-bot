@@ -17,14 +17,22 @@ import (
 var mclc = mclogs.NewClient()
 
 func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	log.Printf("[%v]: %v", m.Author.Username, m.Content)
 	if len(m.Attachments) < 1 || len(m.Attachments) > 5 {
 		return
 	}
 	log.Printf("Attachments: %#+v", m.Attachments[0])
+
+	typingStarted := false
 	for _, a := range m.Attachments {
 		if !strings.HasPrefix(a.ContentType, "text/plain") {
 			continue
+		}
+
+		if !typingStarted {
+			if err := s.ChannelTyping(m.ChannelID); err != nil {
+				log.Printf("Error starting typing indicator: %v", err)
+			}
+			typingStarted = true
 		}
 
 		log.Print("Downloading attachment...")
