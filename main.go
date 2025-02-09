@@ -18,7 +18,7 @@ var mclc = mclogs.NewClient()
 
 func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	log.Printf("[%v]: %v", m.Author.Username, m.Content)
-	if len(m.Attachments) < 1 {
+	if len(m.Attachments) < 1 || len(m.Attachments) > 5 {
 		return
 	}
 	log.Printf("Attachments: %#+v", m.Attachments[0])
