@@ -47,7 +47,6 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			continue
 		}
 
-		// THIS PART IS IMPORTANT
 		pr, err := mclc.PasteLog(string(body))
 		if err != nil {
 			log.Fatalf("Failed to paste log: %v", err)
@@ -84,7 +83,6 @@ func main() {
 
 	log.Println("Bot is now running. Press CTRL+C to exit.")
 
-	// Wait for a termination signal to cleanly shut down the bot
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop

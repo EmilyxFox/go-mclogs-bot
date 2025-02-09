@@ -140,7 +140,6 @@ func (c *Client) GetRawLog(id string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	// If the content type is text/plain, assume success.
 	if ct := resp.Header.Get("Content-Type"); strings.HasPrefix(ct, "text/plain") {
 		b, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -149,7 +148,6 @@ func (c *Client) GetRawLog(id string) (string, error) {
 		return string(b), nil
 	}
 
-	// Otherwise, try to decode an error.
 	var errResp struct {
 		Success bool   `json:"success"`
 		Error   string `json:"error"`
@@ -174,7 +172,6 @@ func (c *Client) GetInsights(id string) (*InsightsResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	// In case of an error response (JSON with success:false)
 	if resp.StatusCode != http.StatusOK {
 		var errResp struct {
 			Success bool   `json:"success"`
@@ -190,7 +187,6 @@ func (c *Client) GetInsights(id string) (*InsightsResponse, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&insights); err != nil {
 		return nil, err
 	}
-	// If an error string is set, report it.
 	if insights.Error != "" {
 		return nil, errors.New(insights.Error)
 	}
@@ -215,7 +211,6 @@ func (c *Client) AnalyseLog(content string) (*InsightsResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	// Handle non-OK responses.
 	if resp.StatusCode != http.StatusOK {
 		var errResp struct {
 			Success bool   `json:"success"`
