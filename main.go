@@ -102,6 +102,10 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	})))
+
 	discordToken, present := os.LookupEnv("DISCORD_TOKEN")
 	if !present {
 		slog.Error("No discord bot token supplied")
