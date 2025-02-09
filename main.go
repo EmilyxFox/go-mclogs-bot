@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,7 +21,20 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if len(m.Attachments) < 1 || len(m.Attachments) > 5 {
 		return
 	}
-	log.Printf("Attachments: %#+v", m.Attachments[0])
+
+	logger := slog.With(
+		slog.Group("message",
+			slog.String("id", m.ID),
+			"attachments", m.Attachments,
+		),
+		slog.Group("channel",
+			slog.String("id", m.ChannelID),
+		),
+		slog.Group("author",
+			slog.String("id", m.Author.ID),
+			slog.String("name", m.Author.Username),
+		),
+	)
 
 	typingStarted := false
 	for _, a := range m.Attachments {
@@ -31,37 +44,39 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 		if !typingStarted {
 			if err := s.ChannelTyping(m.ChannelID); err != nil {
-				log.Printf("Error starting typing indicator: %v", err)
+				logger.Error("Error starting typing indicator", "error", err)
 			}
 			typingStarted = true
 		}
 
-		log.Print("Downloading attachment...")
+		logger.Info("Downloading attachment", "url", a.URL)
 		resp, err := http.Get(a.URL)
 		if err != nil {
-			log.Printf("Failed to download file: %v", err)
+			logger.Error("Failed to download file", "error", err, "url", a.URL)
 			continue
 		}
 		defer resp.Body.Close()
 
-		log.Print("Reading content...")
+		logger.Info("Reading content", "url", a.URL)
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			log.Printf("Failed to read file content: %v", err)
+			logger.Error("Failed to read file content", "error", err, "url", a.URL)
 			continue
 		}
 
 		if len(body) > 10*1024*1024 /* 10MiB */ {
-			log.Println("File too large, skipping...")
+			logger.Info("File too large, skipping", "size", len(body), "url", a.URL)
 			continue
 		}
 
 		pr, err := mclc.PasteLog(string(body))
 		if err != nil {
-			log.Fatalf("Failed to paste log: %v", err)
+			logger.Error("Failed to paste log", "error", err, "url", a.URL)
+			return
 		}
 
-		log.Printf("%+#v", pr)
+		logger.Info("Pasted log successfully", "response", pr)
+
 		re := &discordgo.MessageEmbed{
 			Description: fmt.Sprintf("Your logs were uploaded for easier reading:\n%s", pr.URL),
 			Color:       0x2d3943,
@@ -74,14 +89,14 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 		botUser, err := s.User("@me")
 		if err != nil {
-			fmt.Println("Error fetching bot user,", err)
+			logger.Error("Error fetching bot user", "error", err)
 		} else {
 			re.Author.IconURL = botUser.AvatarURL("32")
 		}
 
 		_, err = s.ChannelMessageSendEmbed(m.ChannelID, re)
 		if err != nil {
-			log.Printf("Failed to send message to Discord: %v", err)
+			logger.Error("Failed to send message to Discord", "error", err)
 		}
 	}
 }
@@ -89,12 +104,14 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 func main() {
 	discordToken, present := os.LookupEnv("DISCORD_TOKEN")
 	if !present {
-		log.Fatal("No discord bot token supplied")
+		slog.Error("No discord bot token supplied")
+		os.Exit(1)
 	}
 
 	discord, err := discordgo.New("Bot " + discordToken)
 	if err != nil {
-		log.Fatalf("Error registering bot: %v", err)
+		slog.Error("Error registering bot", "error", err)
+		os.Exit(1)
 	}
 
 	discord.Identify.Intents += discordgo.IntentMessageContent
@@ -103,15 +120,20 @@ func main() {
 
 	err = discord.Open()
 	if err != nil {
-		log.Fatal("Error opening Discord session,", err)
+		slog.Error("Error opening Discord session", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("Bot is now running. Press CTRL+C to exit.")
+	botUser, err := discord.User("@me")
+	if err != nil {
+		slog.Error("Error fetching bot user", "error", err)
+	}
+	slog.Info(fmt.Sprintf("Logged in as %v#%v", botUser.Username, botUser.Discriminator))
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 
-	log.Println("Shutting down...")
+	slog.Info("Shutting down...")
 	discord.Close()
 }
