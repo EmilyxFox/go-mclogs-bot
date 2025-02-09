@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/emilyxfox/go-mclogs-bot/mclogs"
@@ -61,8 +62,24 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 
 		log.Printf("%+#v", pr)
-		rm := fmt.Sprintf("Your logs were uploaded for easier reading: %s", pr.URL)
-		_, err = s.ChannelMessageSend(m.ChannelID, rm)
+		re := &discordgo.MessageEmbed{
+			Description: fmt.Sprintf("Your logs were uploaded for easier reading:\n%s", pr.URL),
+			Color:       0x2d3943,
+			Timestamp:   time.Now().Format(time.RFC3339),
+			Author: &discordgo.MessageEmbedAuthor{
+				Name: "mclo.gs",
+				URL:  "https://mclo.gs/",
+			},
+		}
+
+		botUser, err := s.User("@me")
+		if err != nil {
+			fmt.Println("Error fetching bot user,", err)
+		} else {
+			re.Author.IconURL = botUser.AvatarURL("32")
+		}
+
+		_, err = s.ChannelMessageSendEmbed(m.ChannelID, re)
 		if err != nil {
 			log.Printf("Failed to send message to Discord: %v", err)
 		}
