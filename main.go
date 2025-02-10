@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -37,68 +38,109 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	logger.Info("Found message attachments", "attachments", m.Attachments)
 
+	ch := make(chan *discordgo.MessageAttachment)
 	typingStarted := false
-	for _, a := range m.Attachments {
-		if !strings.HasPrefix(a.ContentType, "text/plain") {
-			continue
-		}
-
-		if !typingStarted {
-			if err := s.ChannelTyping(m.ChannelID); err != nil {
-				logger.Error("Error starting typing indicator", "error", err)
+	go func() {
+		for _, at := range m.Attachments {
+			if strings.HasPrefix(at.ContentType, "text/plain") {
+				if !typingStarted {
+					if err := s.ChannelTyping(m.ChannelID); err != nil {
+						logger.Error("Error starting typing indicator", "error", err)
+					}
+					typingStarted = true
+				}
+				logger.Debug("Sending attachment to channel")
+				ch <- at
 			}
-			typingStarted = true
 		}
+		close(ch)
+	}()
 
-		logger.Info("Downloading attachment", "url", a.URL)
-		resp, err := http.Get(a.URL)
-		if err != nil {
-			logger.Error("Failed to download file", "error", err, "url", a.URL)
-			continue
-		}
-		defer resp.Body.Close()
+	var fs []*discordgo.MessageEmbedField
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 
-		logger.Info("Reading content", "url", a.URL)
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			logger.Error("Failed to read file content", "error", err, "url", a.URL)
-			continue
-		}
+	for at := range ch {
+		wg.Add(1)
+		go func(at *discordgo.MessageAttachment) {
+			defer wg.Done()
 
-		if len(body) > 10*1024*1024 /* 10MiB */ {
-			logger.Info("File too large, skipping", "size", len(body), "url", a.URL)
-			continue
-		}
+			logger.Info("Downloading attachment", "url", at.URL)
+			resp, err := http.Get(at.URL)
+			if err != nil {
+				logger.Error("Failed to download file", "error", err, "url", at.URL)
+				return
+			}
+			defer resp.Body.Close()
 
-		pr, err := mclc.PasteLog(string(body))
-		if err != nil {
-			logger.Error("Failed to paste log", "error", err, "url", a.URL)
-			return
-		}
+			logger.Info("Reading content", "url", at.URL)
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				logger.Error("Failed to read file content", "error", err, "url", at.URL)
+				return
+			}
 
-		logger.Info("Pasted log successfully", "response", pr)
+			if len(body) > 10*1024*1024 /* 10MiB */ {
+				logger.Info("File too large, skipping", "size", len(body), "url", at.URL)
+				return
+			}
 
-		re := &discordgo.MessageEmbed{
-			Description: fmt.Sprintf("Your logs were uploaded for easier reading:\n%s", pr.URL),
-			Color:       0x2d3943,
-			Timestamp:   time.Now().Format(time.RFC3339),
-			Author: &discordgo.MessageEmbedAuthor{
-				Name: "mclo.gs",
-				URL:  "https://mclo.gs/",
-			},
-		}
+			pr, err := mclc.PasteLog(string(body))
+			if err != nil {
+				logger.Error("Failed to paste log", "error", err, "url", at.URL)
+				return
+			}
 
-		botUser, err := s.User("@me")
-		if err != nil {
-			logger.Error("Error fetching bot user", "error", err)
-		} else {
-			re.Author.IconURL = botUser.AvatarURL("32")
-		}
+			logger.Info("Pasted log successfully", "response", pr)
 
-		_, err = s.ChannelMessageSendEmbed(m.ChannelID, re)
-		if err != nil {
-			logger.Error("Failed to send message to Discord", "error", err)
-		}
+			an, err := mclc.GetInsights(pr.ID)
+			if err != nil {
+				logger.Error("Failed to get paste insights", "error", err, "id", pr.ID)
+			}
+
+			logger.Info("Retrieved log insights successfully", "response", an)
+
+			mu.Lock()
+			fs = append(fs, &discordgo.MessageEmbedField{
+				Name:   an.Title,
+				Value:  pr.URL,
+				Inline: true,
+			})
+			mu.Unlock()
+		}(at)
+	}
+
+	wg.Wait()
+
+	if len(fs) == 0 {
+		logger.Info("No pastes uploaded.")
+		return
+	}
+
+	logger.Info(fmt.Sprintf("Uploaded %v files.", len(fs)), "pastes", fs)
+
+	re := &discordgo.MessageEmbed{
+		Author: &discordgo.MessageEmbedAuthor{
+			Name: "mclo.gs",
+			URL:  "https://mclo.gs/",
+		},
+		Title:       "Your logs were uploaded for easier reading",
+		Description: "-# [Why?](https://github.com/EmilyxFox/go-mclogs-bot/blob/main/why.md) [Source](https://github.com/emilyxfox/go-mclogs-bot)",
+		Fields:      fs,
+		Color:       0x2d3943,
+		Timestamp:   time.Now().Format(time.RFC3339),
+	}
+
+	botUser, err := s.User("@me")
+	if err != nil {
+		logger.Error("Error fetching bot user", "error", err)
+	} else {
+		re.Author.IconURL = botUser.AvatarURL("32")
+	}
+
+	_, err = s.ChannelMessageSendEmbed(m.ChannelID, re)
+	if err != nil {
+		logger.Error("Failed to send message to Discord", "error", err)
 	}
 }
 
