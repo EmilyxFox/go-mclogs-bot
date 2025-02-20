@@ -3,6 +3,7 @@ package mclogs
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -112,13 +113,18 @@ func (c *Client) PasteLog(content string) (*PasteResponse, error) {
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body) // Don't fail on read error, we just need context.
+		return nil, fmt.Errorf("unexpected status code: %d, response: %s", resp.StatusCode, string(body))
+	}
+
 	var pr PasteResponse
 	if err := json.NewDecoder(resp.Body).Decode(&pr); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 	if !pr.Success {
 		return nil, errors.New(pr.Error)
