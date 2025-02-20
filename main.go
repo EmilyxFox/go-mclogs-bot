@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"syscall"
@@ -148,6 +149,10 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	})))
+
+	// get build information embedded in the running binary
+	info, _ := debug.ReadBuildInfo()
+	slog.Debug(fmt.Sprintf("App version: %v", info.Main.Version))
 
 	discordToken, present := os.LookupEnv("DISCORD_TOKEN")
 	if !present {
