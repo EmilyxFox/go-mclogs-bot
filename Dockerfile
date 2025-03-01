@@ -1,5 +1,5 @@
 # ---- Stage 1: Build ----
-FROM golang:1.23.6 AS builder
+FROM golang:1.24 AS builder
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -17,7 +17,7 @@ COPY . .
 RUN go build -o /discord-bot
     
 # ---- Stage 2: Run ----
-FROM golang:1.23.6
+FROM golang:1.24
     
 # Set the working directory inside the container
 WORKDIR /bot
