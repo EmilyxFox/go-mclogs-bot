@@ -13,7 +13,7 @@ RUN go mod download
 # Copy the rest of the application code
 COPY . .
 
-RUN git reset --hard HEAD
+# RUN git reset --hard HEAD
     
 # Build the Go application
 RUN go build -o /discord-bot

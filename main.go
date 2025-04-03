@@ -147,7 +147,24 @@ func handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+		Level:     slog.LevelDebug,
+		AddSource: true,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.SourceKey {
+				if src, ok := a.Value.Any().(*slog.Source); ok {
+					filePath := src.File
+					filePath = strings.TrimPrefix(filePath, "/app/")
+
+					githubLink := fmt.Sprintf("https://github.com/emilyxfox/go-mclogs-bot/blob/main/%s#L%d", filePath, src.Line)
+
+					return slog.Attr{
+						Key:   "source",
+						Value: slog.StringValue(githubLink),
+					}
+				}
+			}
+			return a
+		},
 	})))
 
 	// get build information embedded in the running binary
