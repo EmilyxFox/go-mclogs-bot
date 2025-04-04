@@ -155,7 +155,22 @@ func main() {
 					filePath := src.File
 					filePath = strings.TrimPrefix(filePath, "/app/")
 
-					githubLink := fmt.Sprintf("https://github.com/emilyxfox/go-mclogs-bot/blob/main/%s#L%d", filePath, src.Line)
+					version := "main"
+					if info, ok := debug.ReadBuildInfo(); ok {
+						if info.Main.Version != "" && info.Main.Version != "(devel)" {
+							if strings.HasPrefix(info.Main.Version, "v") && !strings.Contains(info.Main.Version, "-") {
+								version = info.Main.Version
+							} else if strings.Contains(info.Main.Version, "-") {
+								parts := strings.Split(info.Main.Version, "-")
+								if len(parts) >= 3 {
+									commitParts := strings.Split(parts[len(parts)-1], "+")
+									version = commitParts[0]
+								}
+							}
+						}
+					}
+
+					githubLink := fmt.Sprintf("https://github.com/emilyxfox/go-mclogs-bot/blob/%s/%s#L%d", version, filePath, src.Line)
 
 					return slog.Attr{
 						Key:   "source",
